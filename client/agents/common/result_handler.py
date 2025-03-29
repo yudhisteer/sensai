@@ -3,9 +3,9 @@ from typing import List
 
 from openai.types.chat import ChatCompletionMessageToolCall
 
-from .base import Agent
-from .types import AgentFunction, FuncResult, TaskResponse
-from .utils import debug_print
+from client.agents.common.base import Agent
+from client.agents.common.types import AgentFunction, FuncResult, TaskResponse
+from shared.utils import debug_print
 
 
 class ToolCallHandler:

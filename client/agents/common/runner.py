@@ -5,10 +5,10 @@ from collections import defaultdict
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessage
 
-from .base import Agent
-from .result_handler import ToolCallHandler
-from .types import TaskResponse
-from .utils import debug_print
+from client.agents.common.base import Agent
+from client.agents.common.result_handler import ToolCallHandler
+from client.agents.common.types import TaskResponse
+from shared.utils import debug_print
 
 
 class AppRunner:
@@ -29,7 +29,9 @@ class AppRunner:
         while loop_count < max_interactions:
             debug_print(f"Active agent: {active_agent.name}")
             llm_params = self.__create_inference_request(
-                active_agent, history, variables
+                active_agent, 
+                history, 
+                context_variables
             )
             # Check if the agent has a response_format
             if active_agent.response_format:
@@ -65,7 +67,7 @@ class AppRunner:
                 if not message.tool_calls:
                     debug_print("No tool calls found in the response")
                     break
-            debug_print(message.tool_calls)
+            debug_print("Tool calls:", message.tool_calls)
             response = self.tool_handler.handle_tool_calls(
                 message.tool_calls,
                 active_agent.functions,
@@ -75,6 +77,7 @@ class AppRunner:
             if response.agent:
                 debug_print(f"Switching to agent: {response.agent.name}")
                 active_agent = response.agent
+            
 
         return TaskResponse(
             messages=history[init_len:],

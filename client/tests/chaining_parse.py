@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Optional
 from openai import OpenAI
 from pydantic import Field
 

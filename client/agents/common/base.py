@@ -3,7 +3,7 @@ from typing import Any, Callable, List, Optional, Type, Union
 from openai import OpenAI
 from pydantic import BaseModel
 
-from .utils import function_to_json
+from client.agents.common.utils import function_to_json
 
 
 class Agent(BaseModel):
