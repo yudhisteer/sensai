@@ -2,7 +2,7 @@ from typing import Any, Callable, List, Optional, Union
 
 from pydantic import BaseModel
 
-from .base import Agent
+from client.agents.common.base import Agent
 
 
 # AgentFunction defines the signature for functions that can be used by agents.
