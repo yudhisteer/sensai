@@ -8,6 +8,9 @@ __notes__.md
 __test__.py
 output/
 
+# vscode
+.vscode/
+
 # C extensions
 *.so
 
@@ -177,3 +180,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+.vscode/settings.json
+.vscode/settings.json
+.vscode/settings.json
+.vscode/settings.json
