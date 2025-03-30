@@ -1,9 +1,9 @@
 from openai import OpenAI
 
-from .agents import SQL_Agent
+from client.agents.sql_agent.agents import sql_agent
 
-from ..common.runner import AppRunner
-from ..common.utils import pretty_print_messages
+from client.agents.common.runner import AppRunner
+from client.agents.common.utils import pretty_print_messages
 
 # Context variables
 context_variables = {
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     runner = AppRunner(client=OpenAI())
     messages = []
     # Choose entry agent
-    agent = SQL_Agent
+    agent = sql_agent
     while True:
         query = input("Enter your query: ")
         messages.append({"role": "user", "content": query})
