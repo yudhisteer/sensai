@@ -18,9 +18,7 @@ router = APIRouter()
 supabase = SupabaseClientManager().get_client()
 
 
-@router.get(
-    "/temperature/", response_model=TemperatureReading, status_code=status.HTTP_200_OK
-)
+@router.get("/temperature/", response_model=TemperatureReading, status_code=status.HTTP_200_OK)
 async def read_temperature():
     """Endpoint to return the most recent stored temperature."""
     recent_reading = read_temp()
@@ -34,9 +32,7 @@ async def read_temperature():
         )
 
 
-@router.post(
-    "/temperature/sql", response_model=SQLQueryResponse, status_code=status.HTTP_200_OK
-)
+@router.post("/temperature/sql", response_model=SQLQueryResponse, status_code=status.HTTP_200_OK)
 async def sql_query(request: SQLQueryRequest):
     """Execute a raw SQL query provided by the user."""
     try:
@@ -44,7 +40,7 @@ async def sql_query(request: SQLQueryRequest):
         response = supabase.rpc("execute_sql", {"query": sql_query}).execute()
         if response.data and len(response.data) > 0:
             logger.info("SQL Query result successful!")
-            return SQLQueryResponse(result=response.data[0])
+            return SQLQueryResponse(result=response.data)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="No data found"
         )
