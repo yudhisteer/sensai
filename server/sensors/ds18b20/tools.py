@@ -1,14 +1,15 @@
 import glob
+import platform
 import time
 
-from server.db.manager import DatabaseSchemaManager
+from server.db.supabase_client import SupabaseClientManager
+from server.sensors.ds18b20.models import TemperatureReading
 from shared.logger_setup import get_logger
-
-from .models import TemperatureReading
 
 logger = get_logger(__name__)
 
-supabase = DatabaseSchemaManager().get_client()
+# Initialize the Supabase client
+supabase = SupabaseClientManager().get_client()
 
 
 def _locate_ds18b20_device() -> str | None:
@@ -35,6 +36,7 @@ def _read_temp_raw() -> list[str]:
 
 def read_temp() -> tuple[float, float]:
     """Process raw data to extract temperature in Celsius and Fahrenheit."""
+
     lines = _read_temp_raw()
     while lines[0].strip()[-3:] != "YES":  # Wait for a valid reading
         time.sleep(0.2)

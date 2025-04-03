@@ -39,9 +39,21 @@ class Agent(BaseModel):
         return [function_to_json(f) for f in self.functions]
 
     def get_instructions(self, context_variables: dict = {}) -> str:
+        
+        # if context_variables are provided, instructions must be a function
+        if context_variables and not callable(self.instructions):
+            raise ValueError(
+                f"Agent '{self.name}' must have instructions as a callable function when context variables are provided."
+            )
+        
+        # if the instructions is a function, call it with the context variables
         if callable(self.instructions):
             return self.instructions(context_variables)
+        # if the instructions is a string, return it
         return self.instructions
+        # Note: when we parse in context_variables, our instructions will need to be a function that returns a string
+        # Parsing the context_variables without any instructions as function, i.e, only string, will not appear
+        # in the history of the messages
 
 
 class AgentConfig:

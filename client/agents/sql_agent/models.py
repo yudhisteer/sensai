@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from ..common.tools import ResponseBase
+from client.agents.common.tools import ResponseBase
 
 
 class SQLResponse(ResponseBase):

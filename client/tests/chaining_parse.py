@@ -2,10 +2,10 @@ from typing import Optional
 from openai import OpenAI
 from pydantic import Field
 
-from ..agents.common.base import Agent
-from ..agents.common.runner import AppRunner
-from ..agents.common.tools import ResponseBase
-from ..agents.common.utils import pretty_print_messages
+from client.agents.common.base import Agent
+from client.agents.common.runner import AppRunner
+from client.agents.common.tools import ResponseBase
+from client.agents.common.utils import pretty_print_messages
 
 
 #------------------------------------------

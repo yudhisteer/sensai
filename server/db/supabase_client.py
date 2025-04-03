@@ -1,7 +1,7 @@
-from config.config import SUPABASE_KEY, SUPABASE_URL
+from server.config.configs import SUPABASE_KEY, SUPABASE_URL
 from supabase import Client, create_client
 from supabase.client import ClientOptions
-
+from shared.utils import debug_print
 
 class SupabaseClientManager:
     """Manages the Supabase client instance."""
@@ -22,4 +22,12 @@ class SupabaseClientManager:
 
     def get_client(self) -> Client:
         """Returns the Supabase client instance."""
+        debug_print(f"Supabase client: {self.client}")
         return self.client
+
+
+
+if __name__ == "__main__":
+    # test the supabase client
+    SupabaseClientManager().get_client()
+
