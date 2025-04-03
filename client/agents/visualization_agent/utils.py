@@ -1,14 +1,13 @@
 from datetime import datetime
-from typing import List, Dict
+from typing import Dict, List
 
 from pydantic import BaseModel, field_validator
+
 
 
 # ---------------------------------------------------
 # Data Models
 # ---------------------------------------------------
-
-
 class DataEntry(BaseModel):
     id: str
     created_at: str
@@ -19,17 +18,26 @@ class DataEntry(BaseModel):
 
     @field_validator("created_at")
     def validate_created_at(cls, v):
-        # Ensure created_at matches the expected datetime format
         try:
+            # Ensure created_at matches the expected datetime format
             datetime.strptime(v, "%Y-%m-%d %H:%M:%S+00")
         except ValueError:
-            raise ValueError("created_at must be in format 'YYYY-MM-DD HH:MM:SS+00'")
+            try:
+                # Try ISO format
+                datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ")
+                # Convert to the expected format
+                dt = datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ")
+                v = dt.strftime("%Y-%m-%d %H:%M:%S+00")
+            except ValueError:
+                raise ValueError(
+                    "created_at must be in format 'YYYY-MM-DD HH:MM:SS+00' or 'YYYY-MM-DDTHH:MM:SSZ'"
+                )
         return v
 
     @field_validator("*", mode="before")
     def ensure_strings(cls, v, info):
-        # Ensure all fields are strings
-        if not isinstance(v, str):
+        # Ensure id and created_at are strings, but allow other fields to be numeric
+        if info.field_name in ["id", "created_at"] and not isinstance(v, str):
             raise ValueError(f"Field {info.field_name} must be a string, got {type(v)}")
         return v
 

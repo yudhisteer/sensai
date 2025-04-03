@@ -1,14 +1,12 @@
 from datetime import datetime
 from typing import Dict, List, Optional, Union
-import json
+
 import plotly.graph_objects as go
 from pydantic import BaseModel, field_validator
 
+from client.agents.visualization_agent.utils import process_data
 from shared.logger_setup import get_logger
 from shared.utils import debug_print
-
-from client.agents.visualization_agent.utils import process_data
-
 logger = get_logger(__name__)
 
 
@@ -19,7 +17,6 @@ def line_graph(
     title: str = "Line Graph",
     secondary_y_label: Optional[str] = None,
 ) -> go.Figure:
-    
     class PlotConfig(BaseModel):
         data: List[Union[str, Dict[str, Union[str, float, int]]]]
         x_label: str
@@ -44,14 +41,44 @@ def line_graph(
     )
 
     # Process data to get x_key and y_keys
-    x_key, y_keys = process_data(config.data)
+    try:
+        x_key, y_keys = process_data(config.data)
+    except ValueError as e:
+        logger.error(f"Error processing data: {e}")
+        # Create a simple figure with an error message
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error: {str(e)}",
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font=dict(size=20),
+        )
+        fig.update_layout(title="Error Processing Data")
+        fig.write_html("output/plot.html")
+        return fig
 
     # Extract and process x-axis data
     x_data = [entry[x_key] for entry in config.data]
     try:
-        x_data = [datetime.strptime(val, "%Y-%m-%d %H:%M:%S+00") for val in x_data]
+        x_data = [
+            datetime.strptime(val, "%Y-%m-%dT%H:%M:%SZ").strftime(
+                "%Y-%m-%d %H:%M:%S+00"
+            )
+            for val in x_data
+        ]
     except (ValueError, TypeError):
-        pass
+        try:
+            # Try the other format
+            x_data = [
+                datetime.strptime(val, "%Y-%m-%d %H:%M:%S+00").strftime(
+                    "%Y-%m-%d %H:%M:%S+00"
+                )
+                for val in x_data
+            ]
+        except (ValueError, TypeError):
+            logger.warning("Could not parse dates, using as is")
+            pass
 
     fig = go.Figure()
     colors = ["blue", "red", "green", "purple", "orange"]
@@ -59,7 +86,7 @@ def line_graph(
     for i, y_key in enumerate(y_keys):
         try:
             y_data = [float(entry[y_key]) for entry in config.data]
-        except ValueError as e:
+        except (ValueError, TypeError) as e:
             logger.error(f"Error converting {y_key} data to float: {e}")
             continue
 
@@ -76,6 +103,19 @@ def line_graph(
                 ),  # Second y_key uses secondary axis if present
             )
         )
+
+    if not fig.data:
+        # If no traces were added, add an error message
+        fig.add_annotation(
+            text="No valid data to plot",
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font=dict(size=20),
+        )
+        fig.update_layout(title="No Data to Plot")
+        fig.write_html("output/plot.html")
+        return fig
 
     layout = dict(
         title=config.title,
@@ -104,6 +144,7 @@ def line_graph(
 
     fig.update_layout(**layout)
     fig.write_html("output/plot.html")
+    debug_print("Graph was successfully plotted")
     return fig
 
 
@@ -117,27 +158,7 @@ def plot_scatter_plot(): ...
 
 
 if __name__ == "__main__":
-
-    example_data = [
-        {
-            "id": "550e8400-e29b-41d4-a716-446655440013",
-            "celsius": "20.50",
-            "fahrenheit": "68.90",
-            "created_at": "2025-03-22 12:00:00+00",
-        },
-        {
-            "id": "550e8400-e29b-41d4-a716-446655440014",
-            "celsius": "17.90",
-            "fahrenheit": "64.20",
-            "created_at": "2025-03-23 12:10:00+00",
-        },
-        {
-            "id": "550e8400-e29b-41d4-a716-446655440015",
-            "celsius": "29.30",
-            "fahrenheit": "84.70",
-            "created_at": "2025-03-24 12:20:00+00",
-        },
-    ]
+    example_data = [{'id': 'dc978771-e511-451e-84b1-9a09304273a6', 'celsius': 23.5, 'fahrenheit': 74.3, 'created_at': '2025-04-02T10:00:00Z'}, {'id': '5473e5c9-1ce9-4820-ab20-5bc81fec7924', 'celsius': 15.75, 'fahrenheit': 60.35, 'created_at': '2025-04-02T12:00:00Z'}, {'id': '8a19ff54-ed54-4ae9-b4a4-de438a0bcf90', 'celsius': 30.2, 'fahrenheit': 86.36, 'created_at': '2025-04-02T14:00:00Z'}, {'id': 'd3708b65-07d0-4ee8-81ce-89b13ce1e2ed', 'celsius': -5.25, 'fahrenheit': 22.55, 'created_at': '2025-04-02T16:00:00Z'}, {'id': 'a877254e-a2fb-437f-b4c6-e718bb53e12c', 'celsius': 18.9, 'fahrenheit': 66.02, 'created_at': '2025-04-02T18:00:00Z'}]
 
     fig = line_graph(
         data=example_data, y_label="Variable1", secondary_y_label="Variable2"
