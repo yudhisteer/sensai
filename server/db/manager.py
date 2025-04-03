@@ -2,7 +2,7 @@ import json
 from typing import Optional
 
 import psycopg2
-from config.config import (
+from server.config.configs import (
     DB_HOST,
     DB_NAME,
     DB_PASSWORD,
@@ -11,8 +11,8 @@ from config.config import (
     SUPABASE_KEY,
     SUPABASE_URL,
 )
-from db.schemas import TABLE_SCHEMAS
-from db.supabase_client import SupabaseClientManager
+from server.db.schemas import TABLE_SCHEMAS
+from server.db.supabase_client import SupabaseClientManager
 
 from shared.logger_setup import get_logger
 
@@ -159,5 +159,6 @@ class DatabaseSchemaManager:
 
 if __name__ == "__main__":
     manager = DatabaseSchemaManager()
+    connection = manager.get_db_connection()
     schema_result = manager.get_table_schema("temperature_readings")
     print(schema_result)
