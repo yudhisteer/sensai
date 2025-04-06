@@ -55,8 +55,8 @@ class AgentConfig:
             if not isinstance(config_dict["token_limit"], int):
                 raise ValueError("token_limit must be an integer")
             self.token_limit = config_dict["token_limit"]
-        if "client" in config_dict:
-            self.client = config_dict["client"]
+        if "api_key" in config_dict:
+            self.api_key = config_dict["api_key"]
 
     @classmethod
     def from_json(cls, json_str: str):
