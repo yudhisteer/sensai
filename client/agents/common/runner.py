@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Dict, List, Optional
 
 import instructor
+from openai import OpenAI
 
 from client.agents.common.base import Agent, AgentConfig
 from client.agents.common.result_handler import ToolCallHandler
@@ -14,7 +15,8 @@ from shared.utils import debug_print
 class AppRunner:
     def __init__(self, config: AgentConfig):
         self.config = config
-        self.client = config.client
+        self.openai_client = OpenAI(api_key=config.api_key)
+        self.instructor_client = instructor.from_openai(OpenAI(api_key=config.api_key))
         self.tool_handler = ToolCallHandler()
         self.messages: List[Dict] = []  # Persistent message history
 
@@ -39,14 +41,23 @@ class AppRunner:
                 context_variables=context_variables,
                 token_limit=self.config.token_limit,
             )
+
+            # Choose client based on agent configuration
+            if active_agent.functions and not active_agent.response_model:
+                client = self.openai_client  # Use raw OpenAI for tool calls
+                if "response_model" in llm_params:
+                    del llm_params["response_model"]
+            else:
+                client = self.instructor_client  # Use instructor for response_model
+                if "tools" in llm_params:
+                    del llm_params["tools"]
+                    del llm_params["parallel_tool_calls"]
+
             # Check if the client is instructor-patched
-            is_instructor_client = isinstance(self.client, instructor.client.Instructor)
+            is_instructor_client = isinstance(client, instructor.client.Instructor)
 
-            # Remove response_model if not using instructor client
-            if not is_instructor_client and "response_model" in llm_params:
-                del llm_params["response_model"]
-
-            response = self.client.chat.completions.create(**llm_params)
+            # Make the API call
+            response = client.chat.completions.create(**llm_params)
 
             # if the agent has a response model, we need to parse the response
             if is_instructor_client and active_agent.response_model:
