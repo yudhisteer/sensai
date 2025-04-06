@@ -47,12 +47,12 @@ def function_to_json(func: Callable) -> dict:
         for param in signature.parameters.values()
         if param.default == inspect._empty
     ]
-
+    
     return {
         "type": "function",
         "function": {
             "name": func.__name__,
-            "description": func.__doc__ or "",
+            "description": func.__doc__ or "", # the docstring is the description of the function
             "parameters": {
                 "type": "object",
                 "properties": parameters,
