@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Union
 
 from openai.types.chat import ChatCompletionMessageToolCall
 
@@ -31,40 +31,52 @@ class ToolCallHandler:
 
     def handle_tool_calls(
         self,
-        tool_calls: List[ChatCompletionMessageToolCall],
+        tool_calls: List[Union[ChatCompletionMessageToolCall, dict]],
         functions: List[AgentFunction],
     ) -> TaskResponse:
         functions_map = {f.__name__: f for f in functions}
         partial_response = TaskResponse(messages=[], agent=None, context_variables={})
+        if not tool_calls:
+            return partial_response
         for tool_call in tool_calls:
             self.__handle_call(tool_call, functions_map, partial_response)
         return partial_response
 
     def __handle_call(
         self,
-        tool_call: ChatCompletionMessageToolCall,
+        tool_call: Union[ChatCompletionMessageToolCall, dict],
         function_map: dict,
         partial_response: TaskResponse,
     ):
-        name = tool_call.function.name
+        # Handle both dict and object cases
+        if isinstance(tool_call, dict):
+            name = tool_call["function"]["name"]
+            arguments = tool_call["function"]["arguments"]
+            call_id = tool_call["id"]
+        else:
+            name = tool_call.function.name
+            arguments = tool_call.function.arguments
+            call_id = tool_call.id
+
         if name not in function_map:
             debug_print(f"Function {name} not found in function map")
             partial_response.messages.append(
                 {
                     "role": "tool",
                     "tool_name": name,
-                    "tool_call_id": tool_call.id,
+                    "tool_call_id": call_id,
                     "content": f"Error: tool {name} not found",
                 }
             )
             return
-        raw_result = self.__execute_tool(function_map, name, tool_call)
+        
+        raw_result = self.__execute_tool(function_map, name, arguments)
         result = self.__handle_function_result(raw_result)
         partial_response.messages.append(
             {
                 "role": "tool",
                 "tool_name": name,
-                "tool_call_id": tool_call.id,
+                "tool_call_id": call_id,
                 "content": result.value,
             }
         )
@@ -72,7 +84,7 @@ class ToolCallHandler:
             partial_response.agent = result.agent
 
     @staticmethod
-    def __execute_tool(function_map, name, tool_call: ChatCompletionMessageToolCall):
-        args = json.loads(tool_call.function.arguments)
+    def __execute_tool(function_map, name, arguments):
+        args = json.loads(arguments)
         debug_print(f"Executing tool {name} with args {args}")
         return function_map[name](**args)
