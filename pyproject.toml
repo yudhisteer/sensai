@@ -19,6 +19,7 @@ dependencies = [
     "redis>=5.2.1",
     "requests>=2.32.3",
     "setuptools>=78.1.0",
+    "sqlparse>=0.5.3",
     "supabase>=2.15.0",
     "uvicorn>=0.34.0",
 ]
