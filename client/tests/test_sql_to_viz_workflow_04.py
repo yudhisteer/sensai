@@ -1,10 +1,9 @@
 import os
-import json
 from typing import List
 import sqlparse
 from pydantic import BaseModel, Field, field_validator
 
-from client.agents.common.base import Agent, AgentConfig
+from client.agents.common.base import Agent, AgentConfig, AgentResult
 from client.agents.common.runner import AppRunner
 from client.agents.common.types import FuncResult
 from client.agents.common.utils import pretty_print_messages
@@ -171,82 +170,42 @@ def viz_system_prompt(context_variables: dict) -> str:
     - Include a description explaining why you chose this chart type, considering the query’s intent and data characteristics.
     """
 
-def viz_to_supervisor_system_prompt(context_variables: dict) -> str:
-    viz_spec = context_variables.get("viz_spec", "unknown visualization spec")
-    return f"""You are a transition agent. Given this visualization specification:
-    {viz_spec}
-
-    Call switch_to_supervisor to return control to the supervisor for the next step.
-    """
-
-
-def sql_to_supervisor_system_prompt(context_variables: dict) -> str:
-    sql_query = context_variables.get("sql_query", "unknown query")
-    return f"""You are a transition agent. Given this SQL query:
-    {sql_query}
-
-    Call switch_to_supervisor to return control to the supervisor for the next step.
-    """
 
 
 # ------------------------------------------------------------------
 # Switch Functions
 # ------------------------------------------------------------------
 
-
 def switch_to_planner() -> FuncResult:
     """Route the query to the planner agent."""
     return FuncResult(value="Routing to planner", agent=planner_agent)
 
 
-def switch_to_supervisor(
-    step: int = 1, 
-    plan: str = "", 
-    sql_query: str = "", 
-    viz_spec: str = ""
-) -> FuncResult:
+def switch_to_supervisor(plan: str) -> FuncResult:
     """Route the query to the supervisor with the current step."""
     updated_context = table_schema.copy()
-    updated_context["plan"] = (
-        plan if plan else "Plan: 1) Generate SQL query, 2) Create visualization"
-    )
-    updated_context["step"] = step
-    if sql_query:
-        updated_context["sql_query"] = sql_query
-    if viz_spec:
-        updated_context["viz_spec"] = viz_spec
-    return FuncResult(
-        value=f"Returning to supervisor at step {step}",
+    updated_context["plan"] = plan
+    updated_context["step"] = 1
+    return FuncResult(value=f"Plan created: {plan}", agent=supervisor_agent, context_variables=updated_context)
+
+
+def feedback_to_supervisor_agent(context_variables: dict) -> FuncResult:
+    """Route the query to the supervisor with the current step."""
+    return AgentResult(
+        value="Returning to supervisor",
         agent=supervisor_agent,
-        context_variables=updated_context,
+        context_variables=context_variables,
     )
 
-
-def supervisor_to_sql_to_supervisor() -> FuncResult:
-    """Route to the SQL agent to generate a query, then chain to supervisor_agent."""
-    # Step 1: Run sql_agent to generate the SQL query
-    response = runner.run(
-        agent=sql_agent,
-        query=query_sql,
-        context_variables=table_schema,
-    )
-    pretty_print_messages(response.messages)
-
-    # Extract the SQL query from the response
-    sql_message = response.messages[-1]["content"]
-    sql_query = json.loads(sql_message)["query"]
-
-    # Update context with the SQL query
+def switch_to_sql(query: str) -> FuncResult:
+    """Route the SQL query to the SQL agent."""
     updated_context = table_schema.copy()
-    updated_context["sql_query"] = sql_query
-
-    # Return FuncResult pointing to supervisor_agent
+    updated_context["sql_query"] = query
     return FuncResult(
-        value=f"SQL query generated: {sql_query}",
-        agent=supervisor_agent,
+        value=f"Generated SQL: {query}",
+        agent=sql_agent,
         context_variables=updated_context,
     )
-
 
 def switch_to_viz(query: str) -> FuncResult:
     """Route the SQL query to the visualization agent."""
@@ -273,11 +232,31 @@ def end_workflow(error_message: str = "") -> FuncResult:
 # Pre-defined Agents
 # ------------------------------------------------------------------
 
+coordinator_agent = Agent(
+    name="coordinator_agent",
+    instructions=coordinator_system_prompt,
+    functions=[switch_to_planner, end_workflow],
+)
+
+
+planner_agent = Agent(
+    name="planner_agent",
+    instructions=planner_system_prompt,
+    functions=[switch_to_supervisor, end_workflow],
+)
+
+supervisor_agent = Agent(
+    name="supervisor_agent",
+    instructions=supervisor_system_prompt,
+    functions=[switch_to_sql, switch_to_viz, end_workflow],
+)
+
 sql_agent = Agent(
     name="sql_agent",
     instructions=sql_system_prompt,
     response_model=SQLQueryModel,
     functions=[],
+    next_agent=[feedback_to_supervisor_agent],
 )
 
 
@@ -286,49 +265,21 @@ viz_agent = Agent(
     instructions=viz_system_prompt,
     response_model=VisualizationModel,
     functions=[],
-)
-
-viz_to_supervisor_agent = Agent(
-    name="viz_to_supervisor_agent",
-    instructions=viz_to_supervisor_system_prompt,
-    functions=[switch_to_supervisor],
-)
-
-supervisor_agent = Agent(
-    name="supervisor_agent",
-    instructions=supervisor_system_prompt,
-    functions=[supervisor_to_sql_to_supervisor, switch_to_viz, end_workflow],
-)
-
-planner_agent = Agent(
-    name="planner_agent",
-    instructions=planner_system_prompt,
-    functions=[switch_to_supervisor, end_workflow],
-)
-
-coordinator_agent = Agent(
-    name="coordinator_agent",
-    instructions=coordinator_system_prompt,
-    functions=[switch_to_planner, end_workflow],
+    next_agent=[feedback_to_supervisor_agent],
 )
 
 
-# ------------------------------------------------------------------
-# Main Execution
-# ------------------------------------------------------------------
 
 if __name__ == "__main__":
 
-    while True:
-        # SQL-related query with visualization
-        query_sql = input("Enter a query: ")
+    # SQL-related query with visualization
+    query_sql = "Show the trend of celsius and fahrenheit over time"
 
-        response = runner.run(
-            agent=coordinator_agent,
-            query=query_sql,
-            context_variables=table_schema,
-        )
-        print("Full Workflow Response:")
-        # pretty_print_pydantic_model(response)
-        pretty_print_messages(response.messages)
-        print("-" * 100)
+    response = runner.run(
+        agent=coordinator_agent,
+        query=query_sql,
+        context_variables=table_schema,
+    )
+    print("Full Workflow Response:")
+    pretty_print_messages(response.messages)
+    print("-" * 100)
