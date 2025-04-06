@@ -19,7 +19,7 @@ config_dict = {
     "api_key": os.getenv("OPENAI_API_KEY"),
 }
 config = AgentConfig(config_dict)
-runner = AppRunner(config)  # Your existing dual-client AppRunner
+runner = AppRunner(config)
 
 # ------------------------------------------------------------------
 # Data Models

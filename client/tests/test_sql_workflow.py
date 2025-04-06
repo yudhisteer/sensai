@@ -20,10 +20,10 @@ config_dict = {
 config = AgentConfig(config_dict)
 runner = AppRunner(config)
 
+
 # ------------------------------------------------------------------
 # Data Models
 # ------------------------------------------------------------------
-
 class SQLQueryModel(BaseModel):
     query: str
 
@@ -48,6 +48,7 @@ class SQLQueryModel(BaseModel):
 
 class SimpleResponse(BaseModel):
     answer: str = Field(description="A simple response to the query.")
+
 
 # ------------------------------------------------------------------
 # Instructions
@@ -115,16 +116,9 @@ def triage_system_prompt(context_variables: dict) -> str:
 # Switch Functions
 # ------------------------------------------------------------------
 
-# def switch_to_sql_agent() -> FuncResult:
-#     """Route the query to the SQL agent."""
-#     return FuncResult(value="Routing to SQL agent", agent=sql_agent)
-
 def switch_to_sql_agent():
     return sql_agent
 
-# def switch_to_fallback_agent() -> FuncResult:
-#     """Route the query to the fallback agent."""
-#     return FuncResult(value="Routing to fallback agent", agent=fallback_agent)
 
 def switch_to_fallback_agent():
     return fallback_agent
