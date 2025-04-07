@@ -10,6 +10,7 @@ dependencies = [
     "decouple>=0.0.7",
     "fastapi>=0.115.12",
     "isort>=6.0.1",
+    "matplotlib>=3.10.1",
     "openai>=1.69.0",
     "plotly>=6.0.1",
     "psycopg2>=2.9.10",

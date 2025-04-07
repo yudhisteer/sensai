@@ -1,8 +1,5 @@
-import json
 import os
 
-import instructor
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from client.agents.common.base import Agent, AgentConfig
@@ -42,6 +39,7 @@ if __name__ == "__main__":
     response = runner.run(
         agent=trial_agent,
         query="Hi there, I have a question about my bill. Can you help me?",
+        context_variables={},
     )
     pretty_print_pydantic_model(response)
     pretty_print_messages(response.messages)

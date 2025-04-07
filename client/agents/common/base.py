@@ -1,10 +1,24 @@
 import json
-from typing import Callable, List, Optional, Type, Union
+from typing import Callable, Dict, List, Optional, Type, Union
 
 from openai import OpenAI
 from pydantic import BaseModel
 
 from client.agents.common.utils import function_to_json
+
+
+class AgentResult(BaseModel):
+    """
+    Encapsulates the possible return values for an agent function.
+
+    Attributes:
+        value (str): The result value as a string.
+        agent (Agent): The agent instance, if applicable.
+        context_variables (dict): A dictionary of context variables.
+    """
+    value: str = ""
+    agent: Optional["Agent"] = None
+    context_variables: dict = {}
 
 
 class Agent(BaseModel):
@@ -19,6 +33,10 @@ class Agent(BaseModel):
     parallel_tool_calls: bool = True
     tool_choice: str = None
     response_model: Optional[Type[BaseModel]] = None
+    # Allow next_agent to be an Agent, a function returning an Agent, or a function returning a FuncResult
+    next_agent: Optional[
+        List[Union["Agent", Callable[[List[Dict], Dict], Union["Agent", AgentResult]]]]
+    ] = None
 
     def tools_in_json(self):
         return [function_to_json(f) for f in self.functions]

@@ -10,8 +10,9 @@ from shared.utils import debug_print
 def execute_sql_query(sql_query: str, ENDPOINT_URL: str) -> str:
     """Call the API endpoint, store result in a temp file, and return a data_ref."""
     try:
-        payload = {"sql_query": sql_query}
-        
+        cleaned_sql_query = sql_query.rstrip(';').strip()
+        payload = {"sql_query": cleaned_sql_query}
+
         # call API endpoint
         response = requests.post(ENDPOINT_URL, json=payload, timeout=3)
         response.raise_for_status() # `HTTPError`, if one occurred.
@@ -23,13 +24,13 @@ def execute_sql_query(sql_query: str, ENDPOINT_URL: str) -> str:
         
         # create temp file and store data
         temp_dir = tempfile.gettempdir()
-        file_path = os.path.join(temp_dir, data_ref)
+        data_ref_file_path = os.path.join(temp_dir, data_ref)
         
-        with open(file_path, 'w') as f:
+        with open(data_ref_file_path, 'w') as f:
             json.dump(result, f)
         
-        debug_print(f"Data stored in temp file: {file_path}")
-        return data_ref
+        debug_print(f"Data stored in temp file: {data_ref_file_path}")
+        return data_ref_file_path
     
     except requests.exceptions.RequestException as e:
         raise Exception(f"API call failed: {e}")
@@ -52,11 +53,3 @@ def retrieve_data_from_temp_file(data_ref: str) -> dict:
             raise ValueError(f"Data file not found: {file_path}")
     except Exception as e:
         raise Exception(f"Error retrieving data: {e}")
-    
-
-if __name__ == "__main__":
-    data_ref = execute_sql_query("SELECT * FROM temperature_readings", "http://127.0.0.1:8000/temperature/sql")
-    print(data_ref)
-    data = retrieve_data_from_temp_file(data_ref)
-    print(data)
-

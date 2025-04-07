@@ -13,10 +13,7 @@ class TemperatureReading(BaseModel):
 
 
 class SQLQueryResponse(BaseModel):
-    result: List[TemperatureReading] = Field(
-        description="Result of the executed SQL query"
-    )
-
+    result: List[dict] = Field(description="Result of the executed SQL query as a list of JSON objects")
 
 class SQLQueryRequest(BaseModel):
     sql_query: str = Field(description="Raw SQL query to execute directly")

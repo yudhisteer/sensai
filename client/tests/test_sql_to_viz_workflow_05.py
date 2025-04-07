@@ -1,10 +1,14 @@
 import os
-import json
 from typing import List
 import sqlparse
 from pydantic import BaseModel, Field, field_validator
+import requests
+import uuid
+import tempfile
+import json
+import matplotlib.pyplot as plt
 
-from client.agents.common.base import Agent, AgentConfig
+from client.agents.common.base import Agent, AgentConfig, AgentResult
 from client.agents.common.runner import AppRunner
 from client.agents.common.types import FuncResult
 from client.agents.common.utils import pretty_print_messages
@@ -31,7 +35,7 @@ class SQLQueryModel(BaseModel):
 
     @field_validator("query")
     def validate_sql_query(cls, value: str) -> str:
-        value = value.strip()
+        value = value.rstrip(';').strip() # remove trailing semicolon
         if not value:
             raise ValueError("SQL query cannot be empty")
         try:
@@ -109,28 +113,29 @@ def coordinator_system_prompt(context_variables: dict) -> str:
 
 def planner_system_prompt(context_variables: dict) -> str:
     return """You are a planner. Given the user query, your ONLY task is to plan the steps:
-    - If the query involves data analysis (e.g., asking for averages, counts, sums, or any data retrieval from a table), the plan must be: "Plan: 1) Generate SQL query, 2) Create visualization".
+    - If the query involves data analysis (e.g., asking for averages, counts, sums, or any data retrieval from a table), the plan must be: "Plan: 1) Generate SQL query, 2) Execute SQL query, 3) Create visualization".
     - Examples of data analysis queries: "What is the average temperature last month?", "How many readings were taken?", "Show the temperature trend over time.", "What about the difference between mean and max temp today".
     - If the query is clearly unrelated to data analysis (e.g., "What is the weather like today?"), call end_workflow with an error message like "Query not supported for data analysis".
     - You MUST NOT generate the SQL query, visualization, or any other output beyond the plan.
     - After determining the plan, call switch_to_supervisor with the plan as the 'plan' argument to execute the plan. Do not respond with any text in your message content—pass the plan via the tool call.
-    - Example: For "What is the average temperature last month?", call switch_to_supervisor(plan="Plan: 1) Generate SQL query, 2) Create visualization").
+    - Example: For "What is the average temperature last month?", call switch_to_supervisor(plan="Plan: 1) Generate SQL query, 2) Execute SQL query, 3) Create visualization").
     """
 
 def supervisor_system_prompt(context_variables: dict) -> str:
     plan = context_variables.get("plan", "No plan provided")
     step = context_variables.get("step", 1)
+    sql_query = context_variables.get("sql_query", "No SQL query generated yet")
     return f"""You are a supervisor managing a workflow. The plan is:
     {plan}
     Current step: {step}
 
     Follow the plan:
-    - Step 1: Call supervisor_to_sql_to_supervisor to generate a SQL query.
-    - Step 2: Call switch_to_viz to create a visualization.
+    - Step 1: Call switch_to_sql_to_supervisor to generate a SQL query.
+    - Step 2: Call execute_sql_query with the generated SQL query: '{sql_query}' to execute it.
+    - Step 3: Call switch_to_viz to create a visualization.
     - If all steps are complete, call end_workflow.
     - If the plan fails, call end_workflow with an error message.
     """
-
 
 def sql_system_prompt(context_variables: dict) -> str:
     table_schema = context_variables.get("table_schema", None)
@@ -171,81 +176,77 @@ def viz_system_prompt(context_variables: dict) -> str:
     - Include a description explaining why you chose this chart type, considering the query’s intent and data characteristics.
     """
 
-def viz_to_supervisor_system_prompt(context_variables: dict) -> str:
-    viz_spec = context_variables.get("viz_spec", "unknown visualization spec")
-    return f"""You are a transition agent. Given this visualization specification:
-    {viz_spec}
-
-    Call switch_to_supervisor to return control to the supervisor for the next step.
-    """
-
-
-def sql_to_supervisor_system_prompt(context_variables: dict) -> str:
-    sql_query = context_variables.get("sql_query", "unknown query")
-    return f"""You are a transition agent. Given this SQL query:
-    {sql_query}
-
-    Call switch_to_supervisor to return control to the supervisor for the next step.
-    """
 
 
 # ------------------------------------------------------------------
 # Switch Functions
 # ------------------------------------------------------------------
 
-
 def switch_to_planner() -> FuncResult:
     """Route the query to the planner agent."""
     return FuncResult(value="Routing to planner", agent=planner_agent)
 
 
-def switch_to_supervisor(
-    step: int = 1, 
-    plan: str = "", 
-    sql_query: str = "", 
-    viz_spec: str = ""
-) -> FuncResult:
+def switch_to_supervisor(plan: str) -> FuncResult:
     """Route the query to the supervisor with the current step."""
     updated_context = table_schema.copy()
-    updated_context["plan"] = (
-        plan if plan else "Plan: 1) Generate SQL query, 2) Create visualization"
-    )
-    updated_context["step"] = step
-    if sql_query:
-        updated_context["sql_query"] = sql_query
-    if viz_spec:
-        updated_context["viz_spec"] = viz_spec
-    return FuncResult(
-        value=f"Returning to supervisor at step {step}",
+    updated_context["plan"] = plan
+    updated_context["step"] = 1
+    return FuncResult(value=f"Plan created: {plan}", agent=supervisor_agent, context_variables=updated_context)
+
+def execute_sql_query(sql_query: str, endpoint_url: str = "http://127.0.0.1:8000/temperature/sql") -> FuncResult:
+    """Call the API endpoint, store result in a temp file, and return a data_ref."""
+    try:
+        cleaned_sql_query = sql_query.rstrip(';').strip()
+        payload = {"sql_query": cleaned_sql_query}
+        response = requests.post(endpoint_url, json=payload, timeout=3)
+        response.raise_for_status()
+        
+        result = response.json()["result"]
+        data_ref = f"temp_{uuid.uuid4().hex}.json"
+        temp_dir = tempfile.gettempdir()
+        data_ref_file_path = os.path.join(temp_dir, data_ref)
+        
+        with open(data_ref_file_path, 'w') as f:
+            json.dump(result, f)
+        print("Data reference: ", data_ref_file_path)
+        
+        return FuncResult(value=f"Data stored at: {data_ref_file_path}", 
+                          agent=supervisor_agent, 
+                          context_variables={"data_ref": data_ref_file_path})
+    
+    except requests.exceptions.RequestException as e:
+        return FuncResult(value=f"Error: API call failed: {e}", agent=None)
+    except Exception as e:
+        return FuncResult(value=f"Error storing data: {e}", agent=None)
+
+
+def feedback_to_supervisor_agent(context_variables: dict, history_msg: dict = None) -> FuncResult:
+    """Route the query to the supervisor with the current step."""
+    return AgentResult(
+        value="Returning to supervisor",
         agent=supervisor_agent,
-        context_variables=updated_context,
+        context_variables=context_variables,
     )
 
+def retrieve_data_from_temp_file(data_ref: str) -> dict:
+    """Retrieve data from the temp file using the data_ref."""
+    try:
+        temp_dir = tempfile.gettempdir()
+        file_path = os.path.join(temp_dir, data_ref)
+        
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            return data
+        else:
+            raise ValueError(f"Data file not found: {file_path}")
+    except Exception as e:
+        raise Exception(f"Error retrieving data: {e}")
 
-def supervisor_to_sql_to_supervisor() -> FuncResult:
-    """Route to the SQL agent to generate a query, then chain to supervisor_agent."""
-    # Step 1: Run sql_agent to generate the SQL query
-    response = runner.run(
-        agent=sql_agent,
-        query=query_sql,
-        context_variables=table_schema,
-    )
-    pretty_print_messages(response.messages)
-
-    # Extract the SQL query from the response
-    sql_message = response.messages[-1]["content"]
-    sql_query = json.loads(sql_message)["query"]
-
-    # Update context with the SQL query
-    updated_context = table_schema.copy()
-    updated_context["sql_query"] = sql_query
-
-    # Return FuncResult pointing to supervisor_agent
-    return FuncResult(
-        value=f"SQL query generated: {sql_query}",
-        agent=supervisor_agent,
-        context_variables=updated_context,
-    )
+def switch_to_sql() -> Agent:
+    """Route the SQL query to the SQL agent."""
+    return sql_agent
 
 
 def switch_to_viz(query: str) -> FuncResult:
@@ -257,6 +258,48 @@ def switch_to_viz(query: str) -> FuncResult:
         agent=viz_agent,
         context_variables=updated_context,
     )
+
+
+def plot_graph(viz_spec: dict, data_ref: str) -> FuncResult:
+    """Generate and display a plot based on the visualization spec and data from data_ref."""
+    try:
+        # Retrieve data from the temp file
+        data = retrieve_data_from_temp_file(data_ref)
+        if not data or not isinstance(data, list) or len(data) == 0:
+            raise ValueError("No valid data retrieved for plotting")
+
+        # Extract data for plotting (assuming data is a list of dicts from execute_sql_query)
+        x_data = [row[viz_spec["x_axis"][0]] for row in data]
+        y_data = [row[viz_spec["y_axis"][0]] for row in data]
+
+        # Create the plot based on chart_type
+        if viz_spec["chart_type"] == "bar":
+            plt.bar(x_data, y_data)
+        elif viz_spec["chart_type"] == "line":
+            plt.plot(x_data, y_data)
+        elif viz_spec["chart_type"] == "pie":
+            plt.pie(y_data, labels=x_data, autopct='%1.1f%%')
+        else:
+            raise ValueError(f"Unsupported chart type: {viz_spec['chart_type']}")
+
+        # Set title and labels
+        plt.title(viz_spec["title"])
+        plt.xlabel(viz_spec["x_axis"][0])
+        plt.ylabel(viz_spec["y_axis"][0])
+
+        # Display the plot
+        plt.show()
+
+        return FuncResult(
+            value="Plot generated and displayed successfully",
+            agent=supervisor_agent,
+            context_variables={"step": 5}
+        )
+    except Exception as e:
+        return FuncResult(
+            value=f"Error generating plot: {str(e)}",
+            agent=None
+        )
 
 
 def end_workflow(error_message: str = "") -> FuncResult:
@@ -273,11 +316,31 @@ def end_workflow(error_message: str = "") -> FuncResult:
 # Pre-defined Agents
 # ------------------------------------------------------------------
 
+coordinator_agent = Agent(
+    name="coordinator_agent",
+    instructions=coordinator_system_prompt,
+    functions=[switch_to_planner, end_workflow],
+)
+
+
+planner_agent = Agent(
+    name="planner_agent",
+    instructions=planner_system_prompt,
+    functions=[switch_to_supervisor, end_workflow],
+)
+
+supervisor_agent = Agent(
+    name="supervisor_agent",
+    instructions=supervisor_system_prompt,
+    functions=[switch_to_sql, execute_sql_query, switch_to_viz, end_workflow],
+)
+
 sql_agent = Agent(
     name="sql_agent",
     instructions=sql_system_prompt,
     response_model=SQLQueryModel,
     functions=[],
+    next_agent=[feedback_to_supervisor_agent],
 )
 
 
@@ -286,41 +349,15 @@ viz_agent = Agent(
     instructions=viz_system_prompt,
     response_model=VisualizationModel,
     functions=[],
-)
-
-viz_to_supervisor_agent = Agent(
-    name="viz_to_supervisor_agent",
-    instructions=viz_to_supervisor_system_prompt,
-    functions=[switch_to_supervisor],
-)
-
-supervisor_agent = Agent(
-    name="supervisor_agent",
-    instructions=supervisor_system_prompt,
-    functions=[supervisor_to_sql_to_supervisor, switch_to_viz, end_workflow],
-)
-
-planner_agent = Agent(
-    name="planner_agent",
-    instructions=planner_system_prompt,
-    functions=[switch_to_supervisor, end_workflow],
-)
-
-coordinator_agent = Agent(
-    name="coordinator_agent",
-    instructions=coordinator_system_prompt,
-    functions=[switch_to_planner, end_workflow],
+    next_agent=[feedback_to_supervisor_agent],
 )
 
 
-# ------------------------------------------------------------------
-# Main Execution
-# ------------------------------------------------------------------
 
 if __name__ == "__main__":
 
     # SQL-related query with visualization
-    query_sql = "What is the average temperature last month?"
+    query_sql = "What is the average temperature from the data?"
 
     response = runner.run(
         agent=coordinator_agent,
@@ -328,6 +365,5 @@ if __name__ == "__main__":
         context_variables=table_schema,
     )
     print("Full Workflow Response:")
-    # pretty_print_pydantic_model(response)
     pretty_print_messages(response.messages)
     print("-" * 100)
