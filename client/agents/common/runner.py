@@ -34,7 +34,8 @@ class AppRunner:
         init_len = len(history)
 
         while loop_count < self.config.max_interactions:
-            debug_print(f"LOOP COUNT: {loop_count}")
+            print("")
+            debug_print(f"-----------LOOP COUNT: {loop_count}-----------")
             debug_print(f"Active agent: {active_agent.name}")
             llm_params = self.__create_inference_request(
                 agent=active_agent,
