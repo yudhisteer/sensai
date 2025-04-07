@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI
 from server.api.endpoints.ds18b20 import router
 
