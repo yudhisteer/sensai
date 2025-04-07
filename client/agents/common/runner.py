@@ -97,14 +97,12 @@ class AppRunner:
             # If no tool calls, check for next_agent
             if active_agent.next_agent:
                 # next_agent is a list containing either an Agent or a function
-                next_step = active_agent.next_agent[
-                    0
-                ]  # Get the first (and only) element
+                next_step = active_agent.next_agent[0]  # Get the first (and only) element
                 if isinstance(next_step, Agent):
                     next_agent = next_step
                 else:
                     # It's a function; call it with history and context_variables
-                    result = next_step(context_variables=context_variables)
+                    result = next_step(context_variables=context_variables, history_msg=history_msg)
 
                     # Check if the result is an AgentResult or an Agent
                     if isinstance(result, AgentResult):
