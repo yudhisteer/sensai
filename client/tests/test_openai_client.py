@@ -63,6 +63,7 @@ if __name__ == "__main__":
         agent=simple_math_agent,
         query="What is 5 + 3?",
     )
+    print("Response:", response)
     pretty_print_messages(response.messages)
     print("-" * 100)
 
@@ -72,6 +73,7 @@ if __name__ == "__main__":
         query="Write a poem about my cat using its name",
         context_variables={"cat_name": "butbut"},
     )
+    print("Response:", response)
     pretty_print_messages(response.messages)
     print("-" * 100)
 

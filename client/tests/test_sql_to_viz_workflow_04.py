@@ -197,15 +197,10 @@ def feedback_to_supervisor_agent(context_variables: dict) -> FuncResult:
         context_variables=context_variables,
     )
 
-def switch_to_sql(query: str) -> FuncResult:
+def switch_to_sql() -> Agent:
     """Route the SQL query to the SQL agent."""
-    updated_context = table_schema.copy()
-    updated_context["sql_query"] = query
-    return FuncResult(
-        value=f"Generated SQL: {query}",
-        agent=sql_agent,
-        context_variables=updated_context,
-    )
+    return sql_agent
+
 
 def switch_to_viz(query: str) -> FuncResult:
     """Route the SQL query to the visualization agent."""
@@ -273,7 +268,7 @@ viz_agent = Agent(
 if __name__ == "__main__":
 
     # SQL-related query with visualization
-    query_sql = "Show the trend of celsius and fahrenheit over time"
+    query_sql = "What is the average temperature last month?"
 
     response = runner.run(
         agent=coordinator_agent,
