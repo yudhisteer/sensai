@@ -34,6 +34,7 @@ class AppRunner:
         init_len = len(history)
 
         while loop_count < self.config.max_interactions:
+            debug_print(f"LOOP COUNT: {loop_count}")
             debug_print(f"Active agent: {active_agent.name}")
             llm_params = self.__create_inference_request(
                 agent=active_agent,
@@ -57,6 +58,7 @@ class AppRunner:
 
             # Make the API call
             response = client.chat.completions.create(**llm_params)
+            debug_print("RESPONSE:", response)
             # debug_print(f"Raw response from {active_agent.name}: {response}")
             # if the agent has a response model, we need to parse the response
             if active_agent.response_model:
@@ -83,16 +85,16 @@ class AppRunner:
                     history_msg["tool_calls"],
                     active_agent.functions,
                 )
+                debug_print("TOOL RESPONSE:", tool_response)
                 history.extend(tool_response.messages)
+                debug_print("HISTORY:", history)
                 if tool_response.agent:
                     debug_print(f"Switching to agent: {tool_response.agent.name}")
                     active_agent = tool_response.agent
                     if tool_response.context_variables:
                         context_variables.update(tool_response.context_variables)
                     continue  # Continue to process the new agent
-                else:
-                    debug_print("No tool calls found in the response")
-                    break
+                continue
 
             # If no tool calls, check for next_agent
             if active_agent.next_agent:
@@ -116,9 +118,9 @@ class AppRunner:
                     debug_print(f"Switching to next agent: {next_agent.name}")
                     active_agent = next_agent
                     continue
+                continue
 
-            # If no tool calls and no next_agent, end the workflow
-            debug_print("No tool calls or next agent found, ending workflow")
+            debug_print("No tool calls or next agent found, ending process")
             break
 
         return TaskResponse(
