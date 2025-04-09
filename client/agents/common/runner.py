@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 import instructor
 from openai import OpenAI
 
-from client.agents.common.base import Agent, AgentConfig, AgentResult
+from client.agents.common.base import Agent, AgentConfig, FuncResult
 from client.agents.common.result_handler import ToolCallHandler
 from client.agents.common.types import TaskResponse
 from shared.utils import debug_print
@@ -28,7 +28,9 @@ class AppRunner:
     ) -> TaskResponse:
         loop_count = 0
         active_agent = agent
-        context_variables = copy.deepcopy(context_variables or {})
+        # context_variables = copy.deepcopy(context_variables or {})
+        context_variables = context_variables or {}
+
         history = copy.deepcopy(self.messages)
         history.append({"role": "user", "content": query})
         init_len = len(history)
@@ -89,13 +91,16 @@ class AppRunner:
                 debug_print("TOOL RESPONSE:", tool_response)
                 history.extend(tool_response.messages)
                 debug_print("HISTORY:", history)
+
+                if tool_response.context_variables:
+                    context_variables.update(tool_response.context_variables)
+
                 if tool_response.agent:
                     debug_print(f"Switching to agent: {tool_response.agent.name}")
                     active_agent = tool_response.agent
-                    if tool_response.context_variables:
-                        context_variables.update(tool_response.context_variables)
-                    continue  # Continue to process the new agent
+                    continue
                 continue
+
 
             # If no tool calls, check for next_agent
             if active_agent.next_agent:
@@ -107,8 +112,8 @@ class AppRunner:
                     # It's a function; call it with history and context_variables
                     result = next_step(context_variables=context_variables, history_msg=history_msg)
 
-                    # Check if the result is an AgentResult or an Agent
-                    if isinstance(result, AgentResult):
+                    # Check if the result is an FuncResult or an Agent
+                    if isinstance(result, FuncResult):
                         next_agent = result.agent
                         if result.context_variables:
                             context_variables.update(result.context_variables)

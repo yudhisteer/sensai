@@ -3,8 +3,8 @@ from typing import List, Union
 
 from openai.types.chat import ChatCompletionMessageToolCall
 
-from client.agents.common.base import Agent
-from client.agents.common.types import AgentFunction, FuncResult, TaskResponse
+from client.agents.common.base import Agent, FuncResult
+from client.agents.common.types import AgentFunction, TaskResponse
 from shared.utils import debug_print
 
 

@@ -7,20 +7,6 @@ from pydantic import BaseModel
 from client.agents.common.utils import function_to_json
 
 
-class AgentResult(BaseModel):
-    """
-    Encapsulates the possible return values for an agent function.
-
-    Attributes:
-        value (str): The result value as a string.
-        agent (Agent): The agent instance, if applicable.
-        context_variables (dict): A dictionary of context variables.
-    """
-    value: str = ""
-    agent: Optional["Agent"] = None
-    context_variables: dict = {}
-
-
 class Agent(BaseModel):
     """
     Data model for the agent
@@ -35,7 +21,7 @@ class Agent(BaseModel):
     response_model: Optional[Type[BaseModel]] = None
     # Allow next_agent to be an Agent, a function returning an Agent, or a function returning a FuncResult
     next_agent: Optional[
-        List[Union["Agent", Callable[[List[Dict], Dict], Union["Agent", AgentResult]]]]
+        List[Union["Agent", Callable[[List[Dict], Dict], Union["Agent", "FuncResult"]]]]
     ] = None
 
     def tools_in_json(self):
@@ -51,6 +37,13 @@ class Agent(BaseModel):
         # Parsing the context_variables without any instructions as function, i.e, only string, will not appear
         # in the history of the messages
 
+class FuncResult(BaseModel):
+    """
+    Encapsulates the return values for agent functions or task outcomes.
+    """
+    value: str = ""
+    agent: Optional[Agent] = None
+    context_variables: dict = {}
 
 class AgentConfig:
     def __init__(self, config_dict: Optional[dict] = None):
